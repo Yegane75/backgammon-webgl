@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
+  <title>Backgammon - Austin Uphus</title>
+  <style>
+    body {
+      text-align: center;
+    }
+    canvas {
+      border: 15px solid rgb(114, 48, 0);
+    }
+    .game-head {
+      text-align: center;
+      margin-left: auto;
+      margin-right: auto;
+      width: 900px;
+      padding: 0;
+      padding-bottom: 5px;
+    }
+    .game-head > div {
+      padding: 0;
+      margin: 0;
+    }
+    .game-head > div:first-child {
+      position: relative;
+      top: 2.5em;
+    }
+    .game-head > div > span {
+      display: inline-block;
+      width: 430px;
+      padding: 0;
+      margin: 0;
+    }
+    .game-head > div > span > h3 {
+      margin: 0;
+      margin-bottom: .5em;
+    }
+    #dice {
+      padding-top: 3px;
+      padding-left: 14em;
+      padding-right: 14em;
+      text-align: center;
+    }
+    #dice > div, #dice > div > span {
+      display: inline-block;
+    }
+    .die {
+      border: 2px solid black;
+      text-align: center;
+      border-radius: 3px;
+      width: 2em;
+      height: 2em;
+      line-height: 2em;
+    }
+    #double-cube {
+      margin-left: 6.5em;
+      margin-right: 6.5em;
+    }
+    #game-log {
+      width: 900px;
+      height: 10em;
+      background-color: white;
+      color: black;
+      resize: none;
+    }
+  </style>
+
+  <script id="vertex-shader" type="x-shader/x-vertex">
+    attribute vec4 vPosition;
+    uniform float theta;
+
+    void
+    main()
+    {
+      gl_Position.x = vPosition.x;
+      gl_Position.y = vPosition.y;
+      gl_Position.z = 0.0;
+      gl_Position.w = 1.0;
+    }
+  </script>
+
+  <script id="fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec4 color;
+
+    void
+    main()
+    {
+      gl_FragColor = color;
+    }
+  </script>
+
+  <script type="text/javascript" src="./Common/webgl-utils.js"></script>
+  <script type="text/javascript" src="./Common/initShaders.js"></script>
+  <script type="text/javascript" src="./Common/MV.js"></script>
+  <script type="text/javascript" src="jquery.min.js"></script>
+  <script type="text/javascript" src="backgammon.js"></script>
+</head>
+
+<body>
+
+  <h2>Backgammon - Austin Uphus</h2>
+
+  <div class="game-head">
+    <div id="current-player">
+      Current Turn: White
+    </div>
+    <div>
+      <span>
+        <h3>White</h3>
+        <button type="button" id="wroll">Roll Dice</button>
+        <button type="button" id="wdub">Double</button>
+      </span>
+      <span>
+        <h3>Red</h3>
+        <button type="button" id="rroll">Roll Dice</button>
+        <button type="button" id="rdub">Double</button>
+      </span>
+    </div>
+    <div id="dice">
+      <div id="white-dice">
+        <span class="die">1</span>
+        <span class="die">1</span>
+      </div>
+      <div id="double-cube">
+        <span class="die">1</span>
+        <br/>
+        <span id="double-owner">None</span>
+      </div>
+      <div id="red-dice">
+        <span class="die">1</span>
+        <span class="die">1</span>
+      </div>
+    </div>
+  </div>
+  <canvas id="gl-canvas" width="900" height="500">
+    Oops ... your browser doesn't support the HTML5 canvas element
+  </canvas>
+  <br/>
+  <textarea id="game-log" disabled="true">
+  </textarea>
+
+  <script>
+    $(function() {
+      initWebGL();
+      startGame();
+    });
+    function startGame() {
+      var w = 0;
+      var r = 0;
+      logGameEvent("Rolling to decide who goes first.")
+      while(w == r) {
+        w = rollDie();
+        r = rollDie();
+        logGameEvent("White rolled a " + w);
+        logGameEvent("Red rolled a " + r);
+        if(w == r)
+          logGameEvent("A tie! Rerolling...");
+      }
+      if(w > r) {
+        setWhiteDiceTo([w,r]);
+        logGameEvent("White will go first.");
+        $("#white-dice").css('visibility', 'visible');
+        $("#red-dice").css('visibility', 'hidden');
+        $("#current-player").html("Current Turn: White");
+        $("#wroll").prop('disabled', true);
+        gamestate.turn = 'white';
+      } else {
+        setRedDiceTo([r,w]);
+        logGameEvent("Red will go first.");
+        $("#red-dice").css('visibility', 'visible');
+        $("#white-dice").css('visibility', 'hidden');
+        $("#current-player").html("Current Turn: Red");
+        $("#rroll").prop('disabled', true);
+        gamestate.turn = 'red';
+      }
+    }
+
+    function setWhiteDiceTo(vals) {
+      $("#white-dice .die:first").html(vals[0]);
+      $("#white-dice .die:nth-child(2)").html(vals[1]);
+    }
+
+    function setRedDiceTo(vals) {
+      $("#red-dice .die:first").html(vals[0]);
+      $("#red-dice .die:nth-child(2)").html(vals[1]);
+    }
+
+    $("canvas").click(function(event) {
+      var cxpad = $(this).outerWidth(true) - $(this).innerWidth();
+      var cypad = $(this).outerHeight(true) - $(this).innerHeight();
+      var x = event.pageX - $(this).offset().left - cxpad/2;
+      var y = event.pageY - $(this).offset().top - cypad/2;
+      canvasClick(x, y);
+    });
+
+    function rollDie() {
+      var d1 = Math.round((Math.random() * 5)) + 1;
+      return d1;
+    }
+
+    function rollDice() {
+      var d1 = rollDie();
+      var d2 = rollDie();
+      if(d1 == d2) return [d1, d2, d1, d2];
+      return [d1, d2];
+    }
+
+    $("#wroll").click(function() {
+      var r = rollDice();
+      logGameEvent("White rolled " + r);
+      setWhiteDiceTo(r);
+      $("#white-dice").css('visibility', 'visible');
+      $("#red-dice").css('visibility', 'hidden');
+      $(this).prop('disabled', true);
+      $("#rroll").prop('disabled', false);
+      gamestate.turn = 'white';
+      $("#current-player").html("Current Turn: White");
+      var o = $("#double-owner").html();
+      if(o == 'None' || o == 'Red')
+        $("#rdub").prop('disabled', false);
+      else 
+        $("#rdub").prop('disabled', true);
+      $("#wdub").prop('disabled', true);
+    });
+
+    $("#rroll").click(function() {
+      var r = rollDice();
+      logGameEvent("Red rolled " + r);
+      setRedDiceTo(r);
+      $("#red-dice").css('visibility', 'visible');
+      $("#white-dice").css('visibility', 'hidden');
+      $(this).prop('disabled', true);
+      $("#wroll").prop('disabled', false);
+      gamestate.turn = 'red';
+      $("#current-player").html("Current Turn: Red");
+      var o = $("#double-owner").html();
+      if(o == 'None' || o == 'White')
+        $("#wdub").prop('disabled', false);
+      else 
+        $("#wdub").prop('disabled', true);
+      $("#rdub").prop('disabled', true);
+    });
+
+    function logGameEvent(str) {
+      var v = $("#game-log").val();
+      $("#game-log").val(str + "\n" + v);
+    }
+
+    function doubleCube() {
+      var h = $("#double-cube > .die").html();
+      var i = parseInt(h);
+      $("#double-cube > .die").html(i * 2)
+      return i * 2;
+    }
+
+    $("#rdub").click(function() {
+      var i = doubleCube();
+      $("#double-owner").html('White');
+      $(this).prop('disabled', true);
+      logGameEvent('Red has doubled to ' + i);
+    });
+
+    $("#wdub").click(function() {
+      var i = doubleCube();
+      $("#double-owner").html('Red');
+      $(this).prop('disabled', true);
+      logGameEvent('White has doubled to ' + i);
+    });
+
+  </script>
+
+</body>
+</html>
